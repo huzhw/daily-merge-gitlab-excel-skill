@@ -119,8 +119,8 @@ def parse_md(filepath):
             'desc': desc,
             'modules': modules,
             'note': note,
-            'human_h': float(human_h),
-            'ai_h': float(ai_h),
+            'human_h': float(human_h.rstrip('h')),
+            'ai_h': float(ai_h.rstrip('h')),
         })
 
     result = []
