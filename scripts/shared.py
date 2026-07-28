@@ -4,6 +4,9 @@
 import os
 import re
 
+# 任务间分隔线，中文破折号 50 个顶满 D 列宽度
+SEP = '—' * 50
+
 
 def find_report_dir(base_path, year_str, month_str):
     """找或创建当月报告目录，兼容 07月 / 7月 两种格式。
