@@ -2,7 +2,7 @@
 """每日脚本：找最新 Excel → 复制上工作日未完成任务 → 追加当天 md 新需求（按仓库分组合并）"""
 import openpyxl, os, shutil, re
 from datetime import datetime, timedelta
-from shared import find_report_dir
+from shared import find_report_dir, format_desc
 from copy import copy
 from openpyxl.styles import Alignment
 
@@ -129,7 +129,7 @@ def parse_md(filepath):
         tasks = tasks_by_repo[repo]
         desc_parts = []
         for i, t in enumerate(tasks, 1):
-            part = f"{i}、{t['desc']}"
+            part = f"{i}、{format_desc(t['desc'])}"
             if t['modules'] and t['modules'] != '—':
                 part += f"\n{t['modules']}"
             if t['note'] and t['note'] != '—':

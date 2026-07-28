@@ -2,6 +2,7 @@
 """daily-merge 公用工具模块"""
 
 import os
+import re
 
 
 def find_report_dir(base_path, year_str, month_str):
@@ -36,3 +37,19 @@ def find_report_dir(base_path, year_str, month_str):
     # 都不存在 → 创建规范格式目录
     os.makedirs(path_mm, exist_ok=True)
     return path_mm
+
+
+def format_desc(desc):
+    """冒号后的行内编号子项 → 换行缩进，解决 D 列层级冲突。
+
+    "任务描述：1.子项A 2.子项B" → "任务描述：\\n    1.子项A\\n    2.子项B"
+    没有冒号时原样返回。
+    """
+    idx = max(desc.rfind('：'), desc.rfind(':'))
+    if idx < 0:
+        return desc
+    before = desc[:idx + 1]
+    after = desc[idx + 1:]
+    # " 1.xxx 2.xxx" → "\n    1.xxx\n    2.xxx"
+    after = re.sub(r'\s+(\d+[\.、])', r'\n    \1', after)
+    return before + after
