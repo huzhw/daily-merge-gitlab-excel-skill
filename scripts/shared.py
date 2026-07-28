@@ -39,17 +39,35 @@ def find_report_dir(base_path, year_str, month_str):
     return path_mm
 
 
+def to_chinese(n):
+    """数字转中文数字，1→一, 10→十, 26→二十六，>99 回退数字"""
+    digits = '零一二三四五六七八九'
+    if n <= 0:
+        return str(n)
+    if n < 10:
+        return digits[n]
+    if n < 20:
+        return '十' + (digits[n % 10] if n % 10 != 0 else '')
+    if n < 100:
+        tens = digits[n // 10]
+        ones = digits[n % 10] if n % 10 != 0 else ''
+        return tens + '十' + ones
+    return str(n)
+
+
 def format_desc(desc):
     """冒号后的行内编号子项 → 换行缩进，解决 D 列层级冲突。
 
     "任务描述：1.子项A 2.子项B" → "任务描述：\\n    1.子项A\\n    2.子项B"
-    没有冒号时原样返回。
+    首个子项紧跟冒号无空格也能匹配；没有冒号时原样返回。
     """
     idx = max(desc.rfind('：'), desc.rfind(':'))
     if idx < 0:
         return desc
     before = desc[:idx + 1]
     after = desc[idx + 1:]
-    # " 1.xxx 2.xxx" → "\n    1.xxx\n    2.xxx"
-    after = re.sub(r'\s+(\d+[\.、])', r'\n    \1', after)
+    # 首个子项紧跟冒号（无空格）
+    after = re.sub(r'^(\d+[\.、)])', r'\n    \1', after)
+    # 后续子项（有空格）
+    after = re.sub(r'\s+(\d+[\.、)])', r'\n    \1', after)
     return before + after

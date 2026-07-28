@@ -2,7 +2,7 @@
 """月初脚本：从模板起新表，写入当天已完成需求（按仓库分组合并）"""
 import openpyxl, os
 from datetime import datetime, timedelta
-from shared import find_report_dir, format_desc
+from shared import find_report_dir, format_desc, to_chinese
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
@@ -66,7 +66,7 @@ def parse():
         tasks = ts_by_repo[repo]
         desc_parts = []
         for i, t in enumerate(tasks, 1):
-            part = f"{i}、{format_desc(t['desc'])}"
+            part = f"{to_chinese(i)}、{format_desc(t['desc'])}"
             if t['modules'] and t['modules'] != '—':
                 part += f"\n{t['modules']}"
             if t['note'] and t['note'] != '—':
