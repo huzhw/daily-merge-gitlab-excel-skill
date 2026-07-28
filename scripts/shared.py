@@ -5,7 +5,7 @@ import os
 import re
 
 # 任务间分隔线，中文破折号 50 个顶满 D 列宽度
-SEP = '—' * 50
+SEP = '—' * 30
 
 
 def find_report_dir(base_path, year_str, month_str):
