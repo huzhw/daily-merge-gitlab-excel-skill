@@ -2,6 +2,7 @@
 """每日脚本：找最新 Excel → 复制上工作日未完成任务 → 追加当天 md 新需求（按仓库分组合并）"""
 import openpyxl, os, shutil, re
 from datetime import datetime, timedelta
+from shared import find_report_dir
 from copy import copy
 from openpyxl.styles import Alignment
 
@@ -23,7 +24,7 @@ REPO_MAP = {
     '智能数据底座': '智能数据底座',
 }
 
-REPORT_DIR = os.path.join(DESKTOP, f"报告-{YEAR}年", f"日报-{YEAR}-{MONTH}月")
+REPORT_DIR = find_report_dir(DESKTOP, YEAR, MONTH)
 MD_FILE = os.path.join(REPORT_DIR, f"日报需求记录-{YEAR}-{MM}-{DD}.md")
 XLSX_FILE = os.path.join(REPORT_DIR, f"日报表格-胡志伟~~{MM}-{DD}.xlsx")
 
@@ -139,6 +140,7 @@ def parse_md(filepath):
             'repo': repo,
             'desc': '\n\n'.join(desc_parts),
             'human_h': sum(t['human_h'] for t in tasks),
+            'ai_h': sum(t['ai_h'] for t in tasks),
         })
 
     return result
@@ -423,6 +425,9 @@ def main():
             g_cell.number_format = 'yyyy/m/d;@'
 
             ws.cell(row=insert_pos, column=8).value = task['human_h']
+
+            # N 列：AI 辅助工时
+            ws.cell(row=insert_pos, column=14).value = f"预估AI辅助工时(h)：{task['ai_h']}"
 
             for c in range(1, 15):
                 copy_style(ws.cell(row=1, column=c), ws.cell(row=insert_pos, column=c))

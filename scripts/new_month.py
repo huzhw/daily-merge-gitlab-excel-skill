@@ -2,6 +2,7 @@
 """月初脚本：从模板起新表，写入当天已完成需求（按仓库分组合并）"""
 import openpyxl, os
 from datetime import datetime, timedelta
+from shared import find_report_dir
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
@@ -19,7 +20,7 @@ REPO_MAP = {
     '智能数据底座': '智能数据底座',
 }
 
-RD = os.path.join(DESKTOP, f"报告-{Y}年", f"日报-{Y}-{M}月")
+RD = find_report_dir(DESKTOP, Y, M)
 MD = os.path.join(RD, f"日报需求记录-{Y}-{MM}-{DD}.md")
 XL = os.path.join(RD, f"日报表格-胡志伟~~{MM}-{DD}.xlsx")
 
@@ -76,6 +77,7 @@ def parse():
             'repo': repo,
             'desc': '\n\n'.join(desc_parts),
             'human_h': sum(t['human_h'] for t in tasks),
+            'ai_h': sum(t['ai_h'] for t in tasks),
         })
 
     return result
@@ -179,8 +181,14 @@ def main():
         ws.cell(row=row, column=8, value=t['human_h'])
         ws.cell(row=row, column=8).font = dfont; ws.cell(row=row, column=8).alignment = dalign; ws.cell(row=row, column=8).border = bdata
 
-        # I/J/K 列：留空，只加边框
-        for c in (9, 10, 11, 12, 13, 14):
+        # N 列：AI 辅助工时
+        ws.cell(row=row, column=14, value=f"预估AI辅助工时(h)：{t['ai_h']}")
+        ws.cell(row=row, column=14).font = dfont
+        ws.cell(row=row, column=14).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.cell(row=row, column=14).border = bdata
+
+        # I/J/K/L/M 列：留空，只加边框（N 列在上面已写 AI 工时）
+        for c in (9, 10, 11, 12, 13):
             ws.cell(row=row, column=c).border = bdata
 
         print(f'Row{row}: {t["repo"]} #{seq} G={gd2.strftime("%m-%d")} H={t["human_h"]}h')
