@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""月初脚本：从模板起新表，写入当天已完成需求（按仓库分组合并）"""
-import openpyxl, os
+"""月初脚本：从上月 Excel 复制未完成任务 + 写入当天 md 新需求（按仓库分组合并），序号跨月延续"""
+import openpyxl, os, re
 from datetime import datetime, timedelta
 from shared import find_report_dir, format_desc, to_chinese, SEP
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -13,7 +13,6 @@ REPO_MAP = {
     'lanxum-amisp': '档案V6', 'lanxum-amisp-java': '档案V6', 'lanxum-amisp-react': '档案V6',
     'workingpaper-v5.5': '中信底稿V5',
     'standard_thdg_zxdm': '中信底稿V5',
-    # md 直接用中文名的情况
     '中信底稿V5': '中信底稿V5',
     '档案V6': '档案V6',
     '档案系统V6': '档案V6',
@@ -32,10 +31,196 @@ def nwd(d):
     return d
 
 
+def parse_date_val(val):
+    """统一解析单元格日期值 → date 对象"""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    try:
+        return datetime.strptime(str(val)[:10], '%Y-%m-%d').date()
+    except:
+        return None
+
+
+def parse_pct_val(val):
+    """解析 E 列完成百分比 → 0~1 浮点数"""
+    if val is None:
+        return 0
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).replace('%', '').strip()
+    try:
+        return float(s) / 100.0
+    except:
+        return 0
+
+
+def find_last_month_xlsx():
+    """找上月目录下日期最新的 Excel 文件，跨年自动处理。返回 (路径, 文件名) 或 (None, None)"""
+    if TODAY.month == 1:
+        last_year = str(TODAY.year - 1)
+        last_month = '12'
+    else:
+        last_year = Y
+        last_month = f"{TODAY.month - 1:02d}"
+
+    last_rd = find_report_dir(DESKTOP, last_year, last_month)
+    if not os.path.exists(last_rd):
+        return None, None
+
+    pattern = re.compile(r'日报表格-胡志伟~~(\d{2})-(\d{2})\.xlsx$')
+    best_path = None
+    best_date = None
+    for fname in os.listdir(last_rd):
+        m = pattern.match(fname)
+        if not m:
+            continue
+        try:
+            f_date = datetime(int(last_year), int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            continue
+        if best_date is None or f_date > best_date:
+            best_date = f_date
+            best_path = os.path.join(last_rd, fname)
+    return best_path, best_date
+
+
+def get_last_month_data(xlsx_path):
+    """读上月最后一天 Excel，返回 (max_seq, unfinished_rows, last_g_date, remaining_hours)
+
+    unfinished_rows: list[{repo, desc, pct, hours, ai_h}]
+    """
+    wb = openpyxl.load_workbook(xlsx_path)
+    ws = wb[wb.sheetnames[0]]
+
+    # ── 找到填充说明行 ──
+    notes_row = ws.max_row + 1
+    for row in range(2, ws.max_row + 1):
+        a = ws.cell(row=row, column=1).value
+        if a and '填充说明' in str(a):
+            notes_row = row
+            break
+
+    # ── 构建 B 列回溯表（每行对应的真实项目名）──
+    repo_by_row = {}
+    prev_repo = None
+    for row in range(2, notes_row):
+        bv = ws.cell(row=row, column=2).value
+        if bv and str(bv).strip():
+            prev_repo = str(bv).strip()
+        repo_by_row[row] = prev_repo
+
+    # ── 找最大序号 ──
+    max_seq = 0
+    for row in range(2, notes_row):
+        cv = ws.cell(row=row, column=3).value
+        if cv is not None and str(cv).strip().isdigit():
+            max_seq = max(max_seq, int(str(cv).strip()))
+
+    # ── 找最后一个有 G 列值的行，计算当天剩余工时 ──
+    last_g = TODAY
+    last_g_row = 0
+    for row in range(2, notes_row):
+        cv = ws.cell(row=row, column=3).value
+        if cv is None or not str(cv).strip().isdigit():
+            continue
+        gv = ws.cell(row=row, column=7).value
+        if gv is not None:
+            try:
+                if isinstance(gv, datetime):
+                    last_g = gv
+                else:
+                    last_g = datetime.strptime(str(gv)[:10], '%Y-%m-%d')
+                last_g_row = row
+            except:
+                pass
+
+    day_hours = 0
+    for row in range(last_g_row, 1, -1):
+        rd = parse_date_val(ws.cell(row=row, column=7).value)
+        if rd is None or rd != last_g.date():
+            break
+        hv = ws.cell(row=row, column=8).value
+        if hv:
+            try:
+                day_hours += float(hv)
+            except:
+                pass
+    remaining = day_hours % 8
+
+    # ── 找最后一个日期块中未完成的行 ──
+    date_blocks = []
+    i = 2
+    while i < notes_row:
+        av = ws.cell(row=i, column=1).value
+        d = parse_date_val(av)
+        if d is not None:
+            j = i
+            while j + 1 < notes_row:
+                next_a = ws.cell(row=j + 1, column=1).value
+                if next_a is not None:
+                    break
+                j += 1
+            date_blocks.append((d, i, j))
+            i = j + 1
+        else:
+            i += 1
+
+    if not date_blocks:
+        return max_seq, [], last_g, remaining
+
+    _, block_start, block_end = date_blocks[-1]
+
+    unfinished = []
+    for row in range(block_start, block_end + 1):
+        cv = ws.cell(row=row, column=3).value
+        if cv is None or not str(cv).strip().isdigit():
+            continue
+        ev = ws.cell(row=row, column=5).value
+        pct = parse_pct_val(ev)
+        if pct >= 1:
+            continue
+
+        repo = repo_by_row.get(row, '')
+        desc = ws.cell(row=row, column=4).value
+        hours = float(ws.cell(row=row, column=8).value or 0)
+
+        # G 列保留原值
+        gv = ws.cell(row=row, column=7).value
+        g_date = None
+        if gv:
+            if isinstance(gv, datetime):
+                g_date = gv
+            else:
+                try:
+                    g_date = datetime.strptime(str(gv)[:10], '%Y-%m-%d')
+                except:
+                    pass
+
+        # N 列（保留原值，不重新格式化）
+        nv = ws.cell(row=row, column=14).value
+        ai_note = str(nv).strip() if nv else ''
+
+        unfinished.append({
+            'repo': repo,
+            'desc': desc,
+            'pct': ev if ev is not None else '0%',
+            'hours': hours,
+            'g_date': g_date,
+            'ai_note': ai_note,
+        })
+
+    wb.close()
+    return max_seq, unfinished, last_g, remaining
+
+
 def parse():
-    """解析 md，按仓库分组合并已完成任务"""
+    """解析当天 md，按仓库分组合并已完成任务"""
     ts_by_repo = {}
     repo_order = []
+    if not os.path.exists(MD):
+        return []
     with open(MD, encoding='utf-8') as f:
         c = f.read()
     for l in c.split('\n'):
@@ -83,18 +268,8 @@ def parse():
     return result
 
 
-def main():
-    ts = parse()
-    if not ts:
-        print('无任务')
-        return
-    os.makedirs(RD, exist_ok=True)
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = '日报'
-
-    # 样式
+# ── 共用样式构建 ──
+def make_styles():
     hfont = Font(name='Microsoft YaHei', size=11, bold=True, color='FFFFFF')
     hfill = PatternFill(start_color='1450B8', end_color='1450B8', fill_type='solid')
     halign = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -102,8 +277,11 @@ def main():
     dalign = Alignment(horizontal='center', vertical='center')
     bthin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
     bdata = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
+    return hfont, hfill, halign, dfont, dalign, bthin, bdata
 
-    # 表头
+
+def write_header(ws, styles):
+    hfont, hfill, halign, _, _, bthin, _ = styles
     hd = ['*日期', '*项目名称', '*序号\n（全局唯一）', '*任务描述', '*完成百分比',
           '*任务创建时间\n（录入后勿修改）', '*预计完成时间\n（录入后勿修改）',
           '*预计工作人时\n', '调整预计完成时间\n（由于优先级问题调整时填写）',
@@ -113,7 +291,8 @@ def main():
         c.font = hfont; c.fill = hfill; c.alignment = halign; c.border = bthin
     ws.row_dimensions[1].height = 57
 
-    # 备注
+
+def write_notes(ws, data_row_count):
     notes = [
         ('填充说明：\n填写时例子请删除', 1),
         ('1、带*号的字段必填。', 2),
@@ -125,80 +304,72 @@ def main():
         ('7、每天日报发送到公邮：kpi-daily-report@lscjz.com；每人每天一封。', 2),
         ('8、开会和沟通也当作任务记录时长', 2),
     ]
-    nr = len(ts) + 5
+    nr = data_row_count + 5
     for i, (txt, col) in enumerate(notes):
         ws.cell(row=nr + i, column=col, value=txt)
 
-    # 写数据
-    row = 2
-    gd = TODAY
-    gr = 0
-    repo_prev = None
-    seq = 0
 
-    for t in ts:
-        # A 列：当天日期
-        ws.cell(row=row, column=1, value=TODAY).number_format = 'yyyy/m/d;@'
-        ws.cell(row=row, column=1).font = dfont; ws.cell(row=row, column=1).alignment = dalign; ws.cell(row=row, column=1).border = bdata
+def write_row(ws, row, seq, repo, desc, pct, hours, g_date, ai_note, styles):
+    """写一行数据。ai_note 为空时不写 N 列。"""
+    _, _, _, dfont, dalign, _, bdata = styles
 
-        # B 列：项目名（同项目省略）
-        if t['repo'] != repo_prev:
-            ws.cell(row=row, column=2, value=t['repo'])
-            repo_prev = t['repo']
-        ws.cell(row=row, column=2).font = dfont; ws.cell(row=row, column=2).alignment = dalign; ws.cell(row=row, column=2).border = bdata
+    # A 列
+    ws.cell(row=row, column=1, value=TODAY).number_format = 'yyyy/m/d;@'
+    ws.cell(row=row, column=1).font = dfont; ws.cell(row=row, column=1).alignment = dalign; ws.cell(row=row, column=1).border = bdata
 
-        # C 列：序号
-        seq += 1
-        ws.cell(row=row, column=3, value=seq)
-        ws.cell(row=row, column=3).font = dfont; ws.cell(row=row, column=3).alignment = dalign; ws.cell(row=row, column=3).border = bdata
+    # B 列
+    if repo:
+        ws.cell(row=row, column=2, value=repo)
+    ws.cell(row=row, column=2).font = dfont; ws.cell(row=row, column=2).alignment = dalign; ws.cell(row=row, column=2).border = bdata
 
-        # D 列：合并后的描述，行高固定 35
-        ws.cell(row=row, column=4, value=t['desc'])
-        ws.cell(row=row, column=4).font = dfont
-        ws.cell(row=row, column=4).alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
-        ws.cell(row=row, column=4).border = bdata
-        ws.row_dimensions[row].height = 35
+    # C 列
+    ws.cell(row=row, column=3, value=seq)
+    ws.cell(row=row, column=3).font = dfont; ws.cell(row=row, column=3).alignment = dalign; ws.cell(row=row, column=3).border = bdata
 
-        # E 列：固定 0%
-        ws.cell(row=row, column=5, value='0%')
-        ws.cell(row=row, column=5).font = dfont; ws.cell(row=row, column=5).alignment = dalign; ws.cell(row=row, column=5).border = bdata
+    # D 列
+    ws.cell(row=row, column=4, value=desc)
+    ws.cell(row=row, column=4).font = dfont
+    ws.cell(row=row, column=4).alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+    ws.cell(row=row, column=4).border = bdata
+    ws.row_dimensions[row].height = 35
 
-        # F 列：任务创建时间 = 当天
-        ws.cell(row=row, column=6, value=TODAY).number_format = 'yyyy/m/d;@'
-        ws.cell(row=row, column=6).font = dfont; ws.cell(row=row, column=6).alignment = dalign; ws.cell(row=row, column=6).border = bdata
+    # E 列
+    ws.cell(row=row, column=5, value=pct)
+    ws.cell(row=row, column=5).font = dfont; ws.cell(row=row, column=5).alignment = dalign; ws.cell(row=row, column=5).border = bdata
 
-        # G 列：按总工时叠加计算
-        gr2 = gr + t['human_h']
-        gd2 = gd
-        while gr2 > 8:
-            gr2 -= 8
-            gd2 = nwd(gd2)
-        ws.cell(row=row, column=7, value=gd2).number_format = 'yyyy/m/d;@'
-        ws.cell(row=row, column=7).font = dfont; ws.cell(row=row, column=7).alignment = dalign; ws.cell(row=row, column=7).border = bdata
-        gd = gd2; gr = gr2
+    # F 列
+    ws.cell(row=row, column=6, value=TODAY).number_format = 'yyyy/m/d;@'
+    ws.cell(row=row, column=6).font = dfont; ws.cell(row=row, column=6).alignment = dalign; ws.cell(row=row, column=6).border = bdata
 
-        # H 列：总工时
-        ws.cell(row=row, column=8, value=t['human_h'])
-        ws.cell(row=row, column=8).font = dfont; ws.cell(row=row, column=8).alignment = dalign; ws.cell(row=row, column=8).border = bdata
+    # G 列
+    ws.cell(row=row, column=7, value=g_date).number_format = 'yyyy/m/d;@'
+    ws.cell(row=row, column=7).font = dfont; ws.cell(row=row, column=7).alignment = dalign; ws.cell(row=row, column=7).border = bdata
 
-        # N 列：AI 辅助工时
-        ws.cell(row=row, column=14, value=f"预估AI辅助工时(h)：{t['ai_h']}")
+    # H 列
+    ws.cell(row=row, column=8, value=hours)
+    ws.cell(row=row, column=8).font = dfont; ws.cell(row=row, column=8).alignment = dalign; ws.cell(row=row, column=8).border = bdata
+
+    # N 列：只在有内容时写
+    if ai_note:
+        ws.cell(row=row, column=14, value=ai_note)
         ws.cell(row=row, column=14).font = dfont
         ws.cell(row=row, column=14).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
         ws.cell(row=row, column=14).border = bdata
+    else:
+        ws.cell(row=row, column=14).border = bdata
 
-        # I/J/K/L/M 列：留空，只加边框（N 列在上面已写 AI 工时）
-        for c in (9, 10, 11, 12, 13):
-            ws.cell(row=row, column=c).border = bdata
+    # I/J/K/L/M 列留空加边框
+    for c in (9, 10, 11, 12, 13):
+        ws.cell(row=row, column=c).border = bdata
 
-        print(f'Row{row}: {t["repo"]} #{seq} G={gd2.strftime("%m-%d")} H={t["human_h"]}h')
-        row += 1
 
-    # A 列合并
-    if len(ts) > 1:
-        ws.merge_cells(start_row=2, start_column=1, end_row=row - 1, end_column=1)
+def finalize(ws, data_start, data_end):
+    """A 列合并、列宽、冻结、保存"""
+    if data_end > data_start:
+        ws.merge_cells(start_row=data_start, start_column=1, end_row=data_end, end_column=1)
+    for r in range(data_start, data_end + 1):
+        ws.cell(row=r, column=1).alignment = Alignment(horizontal='center', vertical='center')
 
-    # 列宽
     cw = {'A': 13, 'B': 23, 'C': 15, 'D': 60, 'E': 16, 'F': 18, 'G': 18, 'H': 14,
           'I': 32, 'J': 13, 'K': 15, 'L': 14, 'M': 25, 'N': 60}
     for k, v in cw.items():
@@ -206,6 +377,96 @@ def main():
     ws.freeze_panes = 'A2'
     ws.sheet_view.topLeftCell = 'A1'
     wb.save(XL)
+
+
+def main():
+    os.makedirs(RD, exist_ok=True)
+    styles = make_styles()
+
+    # ── 1. 读上月数据 ──
+    last_xlsx, last_date = find_last_month_xlsx()
+    max_seq = 0
+    unfinished = []
+    gd = TODAY
+    gr = 0
+
+    if last_xlsx:
+        print(f"上月基准: {os.path.basename(last_xlsx)} ({last_date})")
+        max_seq, unfinished, last_g, remaining = get_last_month_data(last_xlsx)
+        gd = last_g
+        gr = remaining
+        print(f"  最大序号: {max_seq}, 未完成: {len(unfinished)} 行, G={gd.strftime('%m-%d')} 剩余{gr}h")
+    else:
+        print("未找到上月 Excel，序号从 1 开始")
+
+    # ── 2. 解析当天 md ──
+    new_tasks = parse()
+    if new_tasks:
+        print(f"md 新任务: {len(new_tasks)} 个仓库分组")
+    else:
+        print("md 无已完成任务")
+
+    total = len(unfinished) + len(new_tasks)
+    if total == 0:
+        print("无未完成任务、无新任务，跳过")
+        return
+
+    # ── 3. 创建新 Workbook ──
+    global wb
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '日报'
+    write_header(ws, styles)
+
+    row = 2
+    seq = max_seq
+    repo_prev = None
+
+    # ── 4. 复制上月未完成任务（G 列、H 列、N 列原样保留）──
+    copy_count = 0
+    for u in unfinished:
+        seq += 1
+        repo_name = u['repo'] if u['repo'] != repo_prev else ''
+        if repo_name:
+            repo_prev = repo_name
+
+        write_row(ws, row, seq, repo_name, u['desc'], u['pct'], u['hours'],
+                  u['g_date'] or TODAY, u['ai_note'], styles)
+        print(f"  复制未完成 Row{row}: [{repo_prev}] #{seq} G={u['g_date']} H={u['hours']}h")
+        row += 1
+        copy_count += 1
+
+    # ── 5. 追加当天 md 新任务（G 列从最后一个未完成任务的 G 列继续叠加）──
+    # 找最后一个复制行的 G 列和当天累计工时
+    if unfinished:
+        last_u = unfinished[-1]
+        gd = last_u['g_date'] or TODAY
+        # 计算该 G 日期已有工时
+        day_hours = sum(u2['hours'] for u2 in unfinished if u2['g_date'] and u2['g_date'].date() == gd.date())
+        gr = day_hours % 8
+    else:
+        gd = TODAY
+        gr = 0
+        seq += 1
+        repo_name = t['repo'] if t['repo'] != repo_prev else ''
+        if repo_name:
+            repo_prev = repo_name
+
+        gr2 = gr + t['human_h']
+        gd2 = gd
+        while gr2 > 8:
+            gr2 -= 8
+            gd2 = nwd(gd2)
+
+        ai_note = f"预估AI辅助工时(h)：{t['ai_h']}" if t['ai_h'] > 0 else ''
+        write_row(ws, row, seq, repo_name, t['desc'], '0%', t['human_h'], gd2, ai_note, styles)
+        gd = gd2; gr = gr2
+        print(f"  新增 Row{row}: [{repo_prev}] #{seq} G={gd2.strftime('%m-%d')} H={t['human_h']}h")
+        row += 1
+
+    # ── 6. 备注 + 收尾 ──
+    write_notes(ws, copy_count + len(new_tasks))
+    finalize(ws, 2, row - 1)
     print(f'Done: {XL}')
 
 
