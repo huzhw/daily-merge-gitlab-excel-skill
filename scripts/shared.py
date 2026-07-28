@@ -7,6 +7,9 @@ import re
 # 任务间分隔线，中文破折号 50 个顶满 D 列宽度
 SEP = '—' * 30
 
+# G 列叠加时跳过：D 列含这些关键词 + F=G=J（当天创建当天完成）的临时任务
+SKIP_KEYWORDS = ['开会', '部署', '沟通']
+
 
 def find_report_dir(base_path, year_str, month_str):
     """找或创建当月报告目录，兼容 07月 / 7月 两种格式。
@@ -74,3 +77,24 @@ def format_desc(desc):
     # 后续子项（有空格）
     after = re.sub(r'\s+(\d+[\.、)])', r'\n    \1', after)
     return before + after
+
+
+def is_temp_task(d_val, f_val, g_val, j_val):
+    """D 列含跳过关键词 + F=G=J 同一天 → True，G 列叠加时跳过"""
+    if not d_val:
+        return False
+    if not any(kw in str(d_val) for kw in SKIP_KEYWORDS):
+        return False
+    from datetime import datetime
+    dates = []
+    for v in (f_val, g_val, j_val):
+        if v is None:
+            return False
+        if isinstance(v, datetime):
+            dates.append(v.date())
+        else:
+            try:
+                dates.append(datetime.strptime(str(v)[:10], '%Y-%m-%d').date())
+            except:
+                return False
+    return dates[0] == dates[1] == dates[2]

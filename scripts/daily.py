@@ -2,7 +2,7 @@
 """每日脚本：找最新 Excel → 复制上工作日未完成任务 → 追加当天 md 新需求（按仓库分组合并）"""
 import openpyxl, os, shutil, re
 from datetime import datetime, timedelta
-from shared import find_report_dir, format_desc, to_chinese, SEP
+from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task
 from copy import copy
 from openpyxl.styles import Alignment
 
@@ -180,6 +180,12 @@ def get_last_info(ws):
             rd = parse_date(ws.cell(row=row, column=7).value)
             if rd is None or rd != last_g.date():
                 break
+            # 跳过当天创建当天完成的临时任务（开会/部署/沟通）
+            if is_temp_task(ws.cell(row=row, column=4).value,
+                            ws.cell(row=row, column=6).value,
+                            ws.cell(row=row, column=7).value,
+                            ws.cell(row=row, column=10).value):
+                continue
             hv = ws.cell(row=row, column=8).value
             if hv:
                 try:

@@ -2,7 +2,7 @@
 """月初脚本：从上月 Excel 复制未完成任务 + 写入当天 md 新需求（按仓库分组合并），序号跨月延续"""
 import openpyxl, os, re
 from datetime import datetime, timedelta
-from shared import find_report_dir, format_desc, to_chinese, SEP
+from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
@@ -141,6 +141,12 @@ def get_last_month_data(xlsx_path):
         rd = parse_date_val(ws.cell(row=row, column=7).value)
         if rd is None or rd != last_g.date():
             break
+        # 跳过当天创建当天完成的临时任务（开会/部署/沟通）
+        if is_temp_task(ws.cell(row=row, column=4).value,
+                        ws.cell(row=row, column=6).value,
+                        ws.cell(row=row, column=7).value,
+                        ws.cell(row=row, column=10).value):
+            continue
         hv = ws.cell(row=row, column=8).value
         if hv:
             try:
