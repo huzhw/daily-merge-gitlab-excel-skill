@@ -80,6 +80,15 @@ git clone https://github.com/huzhw/daily-merge-skill.git ~/.claude/skills/daily-
 
 安装后在 AI 编码助手里说「合并日报」触发。
 
+## 相关仓库
+
+- [coding-rules](https://github.com/huzhw/coding-rules) — AI 编码协作规范
+- [git-commit](https://github.com/huzhw/git-commit-skill) — Git 提交规范
+- [daily-record](https://github.com/huzhw/daily-record-skill) — 日报需求记录
+- [reread-claude-md](https://github.com/huzhw/reread-claude-md-skill) — CLAUDE.md 规则重载
+- [token-3000](https://github.com/huzhw/token-3000-skill) — API Token 一键切换
+- [service-manager](https://github.com/huzhw/service-manager) — 桌面服务管理工具
+
 ## 许可
 
 MIT
