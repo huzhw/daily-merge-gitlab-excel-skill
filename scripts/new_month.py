@@ -14,6 +14,7 @@ REPO_MAP = {
     'workingpaper-v5.5': '中信底稿V5',
     'standard_thdg_zxdm': '中信底稿V5',
     '中信底稿V5': '中信底稿V5',
+    '中信底稿v5': '中信底稿V5',
     '档案V6': '档案V6',
     '档案系统V6': '档案V6',
     '智能数据底座': '智能数据底座',
@@ -204,16 +205,30 @@ def get_last_month_data(xlsx_path):
                 except:
                     pass
 
+        # F 列（任务创建时间）保留原值
+        fv = ws.cell(row=row, column=6).value
+        f_date = None
+        if fv:
+            if isinstance(fv, datetime):
+                f_date = fv
+            else:
+                try:
+                    f_date = datetime.strptime(str(fv)[:10], '%Y-%m-%d')
+                except:
+                    pass
+
         # N 列（保留原值，不重新格式化）
         nv = ws.cell(row=row, column=14).value
         ai_note = str(nv).strip() if nv else ''
 
         unfinished.append({
             'repo': repo,
+            'seq': int(str(cv).strip()),
             'desc': desc,
             'pct': ev if ev is not None else '0%',
             'hours': hours,
             'g_date': g_date,
+            'f_date': f_date,
             'ai_note': ai_note,
         })
 
@@ -315,8 +330,8 @@ def write_notes(ws, data_row_count):
         ws.cell(row=nr + i, column=col, value=txt)
 
 
-def write_row(ws, row, seq, repo, desc, pct, hours, g_date, ai_note, styles):
-    """写一行数据。ai_note 为空时不写 N 列。"""
+def write_row(ws, row, seq, repo, desc, pct, hours, g_date, ai_note, styles, f_date=None):
+    """写一行数据。ai_note 为空时不写 N 列。f_date 为空时 F 列填今天。"""
     _, _, _, dfont, dalign, _, bdata = styles
 
     # A 列
@@ -344,7 +359,7 @@ def write_row(ws, row, seq, repo, desc, pct, hours, g_date, ai_note, styles):
     ws.cell(row=row, column=5).font = dfont; ws.cell(row=row, column=5).alignment = dalign; ws.cell(row=row, column=5).border = bdata
 
     # F 列
-    ws.cell(row=row, column=6, value=TODAY).number_format = 'yyyy/m/d;@'
+    ws.cell(row=row, column=6, value=f_date or TODAY).number_format = 'yyyy/m/d;@'
     ws.cell(row=row, column=6).font = dfont; ws.cell(row=row, column=6).alignment = dalign; ws.cell(row=row, column=6).border = bdata
 
     # G 列
@@ -428,31 +443,35 @@ def main():
     seq = max_seq
     repo_prev = None
 
-    # ── 4. 复制上月未完成任务（G 列、H 列、N 列原样保留）──
+    # ── 4. 复制上月未完成任务（B/C/D/E/F/G/H/N 列原样保留，仅 A 列记当天）──
     copy_count = 0
     for u in unfinished:
-        seq += 1
+        seq = u['seq']
+        if seq > max_seq:
+            max_seq = seq
         repo_name = u['repo'] if u['repo'] != repo_prev else ''
         if repo_name:
             repo_prev = repo_name
 
         write_row(ws, row, seq, repo_name, u['desc'], u['pct'], u['hours'],
-                  u['g_date'] or TODAY, u['ai_note'], styles)
+                  u['g_date'] or TODAY, u['ai_note'], styles, f_date=u['f_date'])
         print(f"  复制未完成 Row{row}: [{repo_prev}] #{seq} G={u['g_date']} H={u['hours']}h")
         row += 1
         copy_count += 1
 
     # ── 5. 追加当天 md 新任务（G 列从最后一个未完成任务的 G 列继续叠加）──
-    # 找最后一个复制行的 G 列和当天累计工时
-    if unfinished:
-        last_u = unfinished[-1]
-        gd = last_u['g_date'] or TODAY
-        # 计算该 G 日期已有工时
-        day_hours = sum(u2['hours'] for u2 in unfinished if u2['g_date'] and u2['g_date'].date() == gd.date())
-        gr = day_hours % 8
-    else:
-        gd = TODAY
-        gr = 0
+    for t in new_tasks:
+        # 基准：有未完成任务则从最后一个未完成的 G 列继续，否则从今天开始
+        if unfinished:
+            last_u = unfinished[-1]
+            gd = last_u['g_date'] or TODAY
+            # 计算该 G 日期已有工时
+            day_hours = sum(u2['hours'] for u2 in unfinished if u2['g_date'] and u2['g_date'].date() == gd.date())
+            gr = day_hours % 8
+        else:
+            gd = TODAY
+            gr = 0
+
         seq += 1
         repo_name = t['repo'] if t['repo'] != repo_prev else ''
         if repo_name:
