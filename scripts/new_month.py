@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """月初脚本：从上月 Excel 复制未完成任务 + 写入当天 md 新需求（按仓库分组合并），序号跨月延续"""
-import openpyxl, os, re
+import openpyxl, os, re, copy
 from datetime import datetime, timedelta
 from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -236,6 +236,42 @@ def get_last_month_data(xlsx_path):
     return max_seq, unfinished, last_g, remaining
 
 
+def load_template(xlsx_path):
+    """从基准 Excel 提取表头(第1行)和最后一个数据行的单元格样式，作为新表样式模板"""
+    twb = openpyxl.load_workbook(xlsx_path)
+    tws = twb[twb.sheetnames[0]]
+
+    header = {}
+    for col in range(1, 15):
+        cell = tws.cell(row=1, column=col)
+        header[col] = {
+            'font': copy.copy(cell.font), 'fill': copy.copy(cell.fill),
+            'border': copy.copy(cell.border), 'alignment': copy.copy(cell.alignment),
+        }
+    header['height'] = tws.row_dimensions[1].height or 57
+
+    data = {}
+    data_row = None
+    # 取最后一个日期块的锚行（A 列有日期值 + 有 C 序号），样式最完整（边框/数字格式齐全）
+    for r in range(tws.max_row, 1, -1):
+        av = tws.cell(row=r, column=1).value
+        cv = tws.cell(row=r, column=3).value
+        if av is not None and str(av).strip() and cv is not None and str(cv).strip().isdigit():
+            data_row = r
+            break
+    if data_row:
+        for col in range(1, 15):
+            cell = tws.cell(row=data_row, column=col)
+            data[col] = {
+                'font': copy.copy(cell.font), 'fill': copy.copy(cell.fill),
+                'border': copy.copy(cell.border), 'alignment': copy.copy(cell.alignment),
+                'number_format': cell.number_format,
+            }
+
+    twb.close()
+    return header, data
+
+
 def parse():
     """解析当天 md，按仓库分组合并已完成任务"""
     ts_by_repo = {}
@@ -301,7 +337,8 @@ def make_styles():
     return hfont, hfill, halign, dfont, dalign, bthin, bdata
 
 
-def write_header(ws, styles):
+def write_header(ws, styles, header_t=None):
+    """表头。header_t 为基准表样式模板时逐列套用，否则用默认样式"""
     hfont, hfill, halign, _, _, bthin, _ = styles
     hd = ['*日期', '*项目名称', '*序号\n（全局唯一）', '*任务描述', '*完成百分比',
           '*任务创建时间\n（录入后勿修改）', '*预计完成时间\n（录入后勿修改）',
@@ -309,11 +346,18 @@ def write_header(ws, styles):
           '实际完成时间', '*实际工作人时', '插队序号\n若有插队必填', '延期/调整原因', '备注/说明']
     for i, h in enumerate(hd, 1):
         c = ws.cell(row=1, column=i, value=h)
-        c.font = hfont; c.fill = hfill; c.alignment = halign; c.border = bthin
-    ws.row_dimensions[1].height = 57
+        if header_t and i in header_t:
+            st = header_t[i]
+            c.font = copy.copy(st['font']); c.fill = copy.copy(st['fill'])
+            c.border = copy.copy(st['border']); c.alignment = copy.copy(st['alignment'])
+        else:
+            c.font = hfont; c.fill = hfill; c.alignment = halign; c.border = bthin
+    ws.row_dimensions[1].height = header_t.get('height', 57) if header_t else 57
 
 
-def write_notes(ws, data_row_count):
+def write_notes(ws, data_row_count, styles):
+    """填充说明行，字体统一 Microsoft YaHei 9 号"""
+    nfont = Font(name='Microsoft YaHei', size=9)
     notes = [
         ('填充说明：\n填写时例子请删除', 1),
         ('1、带*号的字段必填。', 2),
@@ -327,61 +371,54 @@ def write_notes(ws, data_row_count):
     ]
     nr = data_row_count + 5
     for i, (txt, col) in enumerate(notes):
-        ws.cell(row=nr + i, column=col, value=txt)
+        c = ws.cell(row=nr + i, column=col, value=txt)
+        c.font = nfont
 
 
-def write_row(ws, row, seq, repo, desc, pct, hours, g_date, ai_note, styles, f_date=None):
-    """写一行数据。ai_note 为空时不写 N 列。f_date 为空时 F 列填今天。"""
+def write_row(ws, row, seq, repo, desc, pct, hours, g_date, ai_note, styles, f_date=None, tdata=None):
+    """写一行数据。ai_note 为空时不写 N 列。f_date 为空时 F 列填今天。
+    样式优先套用基准表模板 tdata（含数字格式），否则用默认样式。"""
     _, _, _, dfont, dalign, _, bdata = styles
 
-    # A 列
-    ws.cell(row=row, column=1, value=TODAY).number_format = 'yyyy/m/d;@'
-    ws.cell(row=row, column=1).font = dfont; ws.cell(row=row, column=1).alignment = dalign; ws.cell(row=row, column=1).border = bdata
+    def style_cell(col, value=None, numfmt=None):
+        cell = ws.cell(row=row, column=col)
+        if tdata and col in tdata:
+            st = tdata[col]
+            cell.font = copy.copy(st['font'])
+            cell.border = copy.copy(st['border'])
+        else:
+            cell.font = dfont
+            cell.border = bdata
+        nf = numfmt
+        if nf is None and tdata and col in tdata:
+            nf = tdata[col].get('number_format')
+        if nf and nf != 'General':
+            cell.number_format = nf
+        if value is not None:
+            cell.value = value
+        # D/M/N 左对齐，其余居中
+        if col in (4, 13, 14):
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        else:
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        return cell
 
-    # B 列
+    style_cell(1, TODAY, 'yyyy/m/d;@')
     if repo:
-        ws.cell(row=row, column=2, value=repo)
-    ws.cell(row=row, column=2).font = dfont; ws.cell(row=row, column=2).alignment = dalign; ws.cell(row=row, column=2).border = bdata
-
-    # C 列
-    ws.cell(row=row, column=3, value=seq)
-    ws.cell(row=row, column=3).font = dfont; ws.cell(row=row, column=3).alignment = dalign; ws.cell(row=row, column=3).border = bdata
-
-    # D 列
-    ws.cell(row=row, column=4, value=desc)
-    ws.cell(row=row, column=4).font = dfont
-    ws.cell(row=row, column=4).alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
-    ws.cell(row=row, column=4).border = bdata
+        style_cell(2, repo)
+    style_cell(3, seq)
+    style_cell(4, desc)
     ws.row_dimensions[row].height = 35
-
-    # E 列
-    ws.cell(row=row, column=5, value=pct)
-    ws.cell(row=row, column=5).font = dfont; ws.cell(row=row, column=5).alignment = dalign; ws.cell(row=row, column=5).border = bdata
-
-    # F 列
-    ws.cell(row=row, column=6, value=f_date or TODAY).number_format = 'yyyy/m/d;@'
-    ws.cell(row=row, column=6).font = dfont; ws.cell(row=row, column=6).alignment = dalign; ws.cell(row=row, column=6).border = bdata
-
-    # G 列
-    ws.cell(row=row, column=7, value=g_date).number_format = 'yyyy/m/d;@'
-    ws.cell(row=row, column=7).font = dfont; ws.cell(row=row, column=7).alignment = dalign; ws.cell(row=row, column=7).border = bdata
-
-    # H 列
-    ws.cell(row=row, column=8, value=hours)
-    ws.cell(row=row, column=8).font = dfont; ws.cell(row=row, column=8).alignment = dalign; ws.cell(row=row, column=8).border = bdata
-
-    # N 列：只在有内容时写
+    # E 列统一写数字 0（未完成/新任务均为 0%），0% 数字格式
+    style_cell(5, 0, '0%')
+    style_cell(6, f_date or TODAY, 'yyyy/m/d;@')
+    style_cell(7, g_date, 'yyyy/m/d;@')
+    style_cell(8, hours)
     if ai_note:
-        ws.cell(row=row, column=14, value=ai_note)
-        ws.cell(row=row, column=14).font = dfont
-        ws.cell(row=row, column=14).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.cell(row=row, column=14).border = bdata
-    else:
-        ws.cell(row=row, column=14).border = bdata
-
-    # I/J/K/L/M 列留空加边框
+        style_cell(14, ai_note)
+    # I/J/K/L/M 列无值，但套用样式（I/J/K/L 居中，M 左对齐）
     for c in (9, 10, 11, 12, 13):
-        ws.cell(row=row, column=c).border = bdata
+        style_cell(c)
 
 
 def finalize(ws, data_start, data_end):
@@ -437,7 +474,12 @@ def main():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = '日报'
-    write_header(ws, styles)
+    # 从基准表加载样式模板（无基准时用默认样式）
+    header_t = None
+    data_t = None
+    if last_xlsx:
+        header_t, data_t = load_template(last_xlsx)
+    write_header(ws, styles, header_t)
 
     row = 2
     seq = max_seq
@@ -454,7 +496,7 @@ def main():
             repo_prev = repo_name
 
         write_row(ws, row, seq, repo_name, u['desc'], u['pct'], u['hours'],
-                  u['g_date'] or TODAY, u['ai_note'], styles, f_date=u['f_date'])
+                  u['g_date'] or TODAY, u['ai_note'], styles, f_date=u['f_date'], tdata=data_t)
         print(f"  复制未完成 Row{row}: [{repo_prev}] #{seq} G={u['g_date']} H={u['hours']}h")
         row += 1
         copy_count += 1
@@ -484,13 +526,13 @@ def main():
             gd2 = nwd(gd2)
 
         ai_note = f"预估AI辅助工时(h)：{t['ai_h']}" if t['ai_h'] > 0 else ''
-        write_row(ws, row, seq, repo_name, t['desc'], '0%', t['human_h'], gd2, ai_note, styles)
+        write_row(ws, row, seq, repo_name, t['desc'], '0%', t['human_h'], gd2, ai_note, styles, tdata=data_t)
         gd = gd2; gr = gr2
         print(f"  新增 Row{row}: [{repo_prev}] #{seq} G={gd2.strftime('%m-%d')} H={t['human_h']}h")
         row += 1
 
     # ── 6. 备注 + 收尾 ──
-    write_notes(ws, copy_count + len(new_tasks))
+    write_notes(ws, copy_count + len(new_tasks), styles)
     finalize(ws, 2, row - 1)
     print(f'Done: {XL}')
 
