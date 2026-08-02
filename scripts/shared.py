@@ -67,6 +67,8 @@ def format_desc(desc):
     "任务描述：1.子项A 2.子项B" → "任务描述：\\n    1.子项A\\n    2.子项B"
     首个子项紧跟冒号无空格也能匹配；没有冒号时原样返回。
     """
+    # md 表格内的换行标签 → Excel 单元格换行符（兼容 <br>、<br/>、<br />、</br>、大小写）
+    desc = re.sub(r'<\s*/?\s*br\s*/?\s*>', '\n', desc, flags=re.I)
     idx = max(desc.rfind('：'), desc.rfind(':'))
     if idx < 0:
         return desc
