@@ -3,12 +3,16 @@
 
 import os
 import re
+from datetime import timedelta
 
 # 任务间分隔线，中文破折号 50 个顶满 D 列宽度
 SEP = '—' * 30
 
 # G 列叠加时跳过：D 列含这些关键词 + F=G=J（当天创建当天完成）的临时任务
 SKIP_KEYWORDS = ['开会', '部署', '沟通']
+
+# chinesecalendar 未安装时的降级警告只打一次
+_HOLIDAY_WARNED = False
 
 
 def find_report_dir(base_path, year_str, month_str):
@@ -100,3 +104,35 @@ def is_temp_task(d_val, f_val, g_val, j_val):
             except:
                 return False
     return dates[0] == dates[1] == dates[2]
+
+
+def is_workday(d):
+    """判断是否为工作日：跳过双休和法定节假日，调休上班日算工作日。
+
+    G 列叠加日期时用。优先 chinesecalendar 库（含节假日+调休数据，
+    按年维护）；库未安装时降级为仅跳过周六日，并打印一次警告。
+
+    Args:
+        d: date / datetime 对象
+
+    Returns:
+        True 表示工作日
+    """
+    global _HOLIDAY_WARNED
+    try:
+        import chinese_calendar as cc
+        return cc.is_workday(d)
+    except ImportError:
+        if not _HOLIDAY_WARNED:
+            print("[警告] chinesecalendar 未安装，G 列只跳双休、不跳节假日。"
+                  "请执行: pip install chinesecalendar")
+            _HOLIDAY_WARNED = True
+        return d.weekday() < 5
+
+
+def next_workday(d):
+    """下一个工作日：从 d 的下一天起，跳过双休和法定节假日（含调休）"""
+    d = d + timedelta(days=1)
+    while not is_workday(d):
+        d = d + timedelta(days=1)
+    return d

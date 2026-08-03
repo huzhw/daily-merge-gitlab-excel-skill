@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """月初脚本：从上月 Excel 复制未完成任务 + 写入当天 md 新需求（按仓库分组合并），序号跨月延续"""
 import openpyxl, os, re, copy
-from datetime import datetime, timedelta
-from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task
+from datetime import datetime
+from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task, next_workday
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
@@ -23,13 +23,6 @@ REPO_MAP = {
 RD = find_report_dir(DESKTOP, Y, M)
 MD = os.path.join(RD, f"日报需求记录-{Y}-{MM}-{DD}.md")
 XL = os.path.join(RD, f"日报表格-胡志伟~~{MM}-{DD}.xlsx")
-
-
-def nwd(d):
-    d += timedelta(days=1)
-    while d.weekday() >= 5:
-        d += timedelta(days=1)
-    return d
 
 
 def parse_date_val(val):
@@ -523,7 +516,7 @@ def main():
         gd2 = gd
         while gr2 > 8:
             gr2 -= 8
-            gd2 = nwd(gd2)
+            gd2 = next_workday(gd2)
 
         ai_note = f"预估AI辅助工时(h)：{t['ai_h']}" if t['ai_h'] > 0 else ''
         write_row(ws, row, seq, repo_name, t['desc'], '0%', t['human_h'], gd2, ai_note, styles, tdata=data_t)

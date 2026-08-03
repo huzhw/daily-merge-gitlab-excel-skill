@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """每日脚本：找最新 Excel → 复制上工作日未完成任务 → 追加当天 md 新需求（按仓库分组合并）"""
 import openpyxl, os, shutil, re
-from datetime import datetime, timedelta
-from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task
+from datetime import datetime
+from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task, next_workday
 from copy import copy
 from openpyxl.styles import Alignment
 
@@ -147,13 +147,6 @@ def parse_md(filepath):
     return result
 
 
-def next_workday(d):
-    d = d + timedelta(days=1)
-    while d.weekday() >= 5:
-        d = d + timedelta(days=1)
-    return d
-
-
 def get_last_info(ws):
     """读最后一个数据行的 G 列和当天累计工时"""
     last_g = TODAY
@@ -206,7 +199,7 @@ def find_notes(ws):
 
 
 def calc_g(hours, prev_date, remaining):
-    """8h/工作日叠加，跳过周六日"""
+    """8h/工作日叠加，跳过双休和法定节假日（含调休）"""
     total = remaining + hours
     d = prev_date
     while total > 8:

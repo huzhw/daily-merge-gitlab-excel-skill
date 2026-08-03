@@ -20,7 +20,7 @@
 
 - 自动找到当天 md 文件和当月 Excel 基准文件
 - 序号全局递增，永不重复
-- G 列按 8h/工作日叠加，跳过周六日
+- G 列按 8h/工作日叠加，跳过双休和法定节假日（含调休）
 - A 列同日期自动合并 + 居中
 - D/N 列自动换行，行高自适应
 - E 列写百分比（`100%`）
@@ -46,8 +46,10 @@ python scripts/daily.py
 ## 依赖
 
 ```bash
-pip install openpyxl
+pip install openpyxl chinesecalendar
 ```
+
+> `chinesecalendar` 用于 G 列跳过法定节假日（含调休）。未安装时自动降级为仅跳过双休并打印警告。
 
 ## 文件结构
 
