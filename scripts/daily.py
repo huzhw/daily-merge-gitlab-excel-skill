@@ -2,7 +2,8 @@
 """每日脚本：找最新 Excel → 复制上工作日未完成任务 → 追加当天 md 新需求（按仓库分组合并）"""
 import openpyxl, os, shutil, re
 from datetime import datetime
-from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task, next_workday
+from shared import (find_report_dir, format_desc, to_chinese, SEP, is_temp_task,
+                    next_workday, rebuild_notes_merges, unmerge_notes_horizontal)
 from copy import copy
 from openpyxl.styles import Alignment
 
@@ -310,6 +311,11 @@ def main():
     wb = openpyxl.load_workbook(XLSX_FILE)
     ws = wb[wb.sheetnames[0]]
 
+    # ── 3. 提前清除说明区横向合并 ──
+    # openpyxl insert_rows 不移动合并单元格，残留横向合并会落在新任务行上，
+    # 导致向合并区内非锚点 cell 写值丢失（C~H 被吞）。必须先清掉再插行/写值。
+    unmerge_notes_horizontal(ws)
+
     # ── 3. 去重 ──
     removed = remove_today_rows(ws)
     if removed:
@@ -470,6 +476,9 @@ def main():
         ws.column_dimensions[k].width = v
     ws.freeze_panes = 'A2'
     ws.sheet_view.topLeftCell = 'A1'
+
+    # 修复 openpyxl insert_rows 不移动合并导致的说明区横向合并错位
+    rebuild_notes_merges(ws)
 
     wb.save(XLSX_FILE)
     print(f"\n已保存: {XLSX_FILE}")

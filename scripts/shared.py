@@ -136,3 +136,59 @@ def next_workday(d):
     while not is_workday(d):
         d = d + timedelta(days=1)
     return d
+
+
+def unmerge_notes_horizontal(ws):
+    """删除所有 B~I 范围内的横向合并（填充说明区合并特征）。
+
+    daily.py 必须在 load 后立即调用：openpyxl 的 insert_rows() 不移动已存在
+    的合并单元格，残留横向合并在插入后可能落在新任务行上，而向合并区域内
+    非锚点 cell 写值会丢失，导致新行 C~H 内容被吞。先清掉，保证后续
+    insert_rows/写值全程无横向合并干扰，保存前再调用 rebuild_notes_merges 重建。
+
+    Args:
+        ws: openpyxl Worksheet 对象
+    """
+    for mr in list(ws.merged_cells.ranges):
+        if mr.min_row == mr.max_row and mr.min_col <= 2 and mr.max_col >= 9:
+            ws.unmerge_cells(str(mr))
+
+
+def rebuild_notes_merges(ws):
+    """重建填充说明区的 B~I 横向合并，修复 insert_rows 错位。
+
+    openpyxl 的 insert_rows() 只移动单元格值、不移动已存在的合并单元格，
+    导致 daily.py 插行后说明区的横向合并（B~I）原地停留、与下移后的
+    说明内容错位，横向合并可能压住新写入的任务行，把 D~I 内容吞掉。
+    保存前调用本函数，按说明内容当前实际位置重建横向合并。
+
+    Args:
+        ws: openpyxl Worksheet 对象
+
+    Returns:
+        None
+    """
+    # 1. 删除所有 B~I 范围内的横向合并（说明区合并特征：单行 + 列跨 B~I 或更宽）
+    unmerge_notes_horizontal(ws)
+
+    # 2. 定位「填充说明」标题行
+    notes_row = None
+    for row in range(1, ws.max_row + 1):
+        a = ws.cell(row=row, column=1).value
+        if a and '填充说明' in str(a):
+            notes_row = row
+            break
+    if notes_row is None:
+        return
+
+    # 3. 从标题行往下找最后一个非空行（标题在 A 列，说明条在 B 列）
+    last_row = ws.max_row
+    while last_row > notes_row:
+        if ws.cell(row=last_row, column=1).value or ws.cell(row=last_row, column=2).value:
+            break
+        last_row -= 1
+
+    # 4. 逐行重建 B~I 横向合并（跳过空白行）
+    for r in range(notes_row, last_row + 1):
+        if ws.cell(row=r, column=1).value or ws.cell(row=r, column=2).value:
+            ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=9)
