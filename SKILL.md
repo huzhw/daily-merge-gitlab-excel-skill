@@ -114,4 +114,12 @@ python "{技能目录}/scripts/daily.py"
 
 ---
 
+## 🔴 Windows bash 执行规范（反复踩坑，禁止违反）
+
+- **禁用 `python -c "多行代码"`**：本环境 bash 带 cmd 包装层，内联代码含 `||`/`&&`/换行会被 `goto :error` 拦截，报 `IndentationError: unexpected indent`。要多行处理 → 用 Write 写临时 `.py` 文件再 `python 文件.py`。
+- **officecli JSON 用 jq 提取**：`officecli view file.xlsx text --json | jq '.data.sheets[0].rows'`，**禁止**把 officecli 输出再喂给 `python -c` 二次处理。提取固定列用 jq 即可，无需 Python。
+- **验证合并结果**：跑完 `daily.py` 后用 `officecli view ... --json` 检查今天新增行（H 列工时 = md 人工工时 sum、G 列预计完成时间、N 列 AI 工时），有差异先改 md 再重跑。
+
+---
+
 > md 记账，Excel 交差——一个脚本每天跑，序号自动编，日期自动叠。
