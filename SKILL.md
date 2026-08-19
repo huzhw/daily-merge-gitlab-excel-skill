@@ -12,7 +12,7 @@ motto: "md 记账，Excel 交差——一个脚本每天跑，序号自动编，
 ```
 md 需求记录：C:\Users\Administrator\Desktop\报告-{年}年\日报-{年}-{月}月\日报需求记录-{YYYY}-{MM}-{DD}.md
 Excel 日报：  C:\Users\Administrator\Desktop\报告-{年}年\日报-{年}-{月}月\日报表格-胡志伟~~{MM}-{DD}.xlsx
-合并脚本：   {技能目录}/scripts/merge.py
+合并脚本：   {技能目录}/scripts/daily.py（每日）/ new_month.py（月初）
 ```
 
 ---
@@ -86,7 +86,7 @@ md 中同一仓库的所有已完成任务合并为 Excel 的一行。D 列拼�
 ```bash
 python "{技能目录}/scripts/new_month.py"
 ```
-从模板起新表，序号从 1 开始。
+从上月 Excel 复制未完成任务，序号跨月延续（无上月基准时才从 1 开始）。
 
 **其他日期：**
 ```bash
@@ -100,7 +100,7 @@ python "{技能目录}/scripts/daily.py"
 
 ## 脚本说明
 
-- `new_month.py` — 月初脚本：读模板 → 写入当天数据，序号从 1 计数
+- `new_month.py` — 月初脚本：读上月 Excel → 复制未完成任务 + 写入当天数据，序号跨月延续
 - `daily.py` — 每日脚本：读昨天 Excel → 追加当天数据，序号递增
 
 1. 解析当天 md 文件，提取已完成任务
