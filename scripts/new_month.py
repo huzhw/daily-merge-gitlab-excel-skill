@@ -1,9 +1,16 @@
 # -*- coding: utf-8 -*-
 """月初脚本：从上月 Excel 复制未完成任务 + 写入当天 md 新需求（按仓库分组合并），序号跨月延续"""
 import openpyxl, os, re, copy
+import sys
 from datetime import datetime
 from shared import find_report_dir, format_desc, to_chinese, SEP, is_temp_task, next_workday
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+# Windows 控制台/管道默认 GBK，强制 UTF-8 输出避免中文乱码
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except (AttributeError, ValueError, OSError):
+    pass
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
 TODAY = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -284,7 +291,7 @@ def parse():
         if status not in ('已完成', '100%') or not seq.isdigit():
             continue
 
-        display = REPO_MAP.get(repo, repo)
+        display = REPO_MAP.get(repo, repo).replace('、', '+')
         if display not in ts_by_repo:
             ts_by_repo[display] = []
             repo_order.append(display)
@@ -292,8 +299,8 @@ def parse():
             'desc': desc,
             'modules': modules,
             'note': note,
-            'human_h': float(human_h.rstrip('h')),
-            'ai_h': float(ai_h.rstrip('h')),
+            'human_h': float(human_h.rstrip('h') or 0),
+            'ai_h': float(ai_h.rstrip('h') or 0),
         })
 
     result = []
@@ -495,18 +502,18 @@ def main():
         copy_count += 1
 
     # ── 5. 追加当天 md 新任务（G 列从最后一个未完成任务的 G 列继续叠加）──
-    for t in new_tasks:
-        # 基准：有未完成任务则从最后一个未完成的 G 列继续，否则从今天开始
-        if unfinished:
-            last_u = unfinished[-1]
-            gd = last_u['g_date'] or TODAY
-            # 计算该 G 日期已有工时
-            day_hours = sum(u2['hours'] for u2 in unfinished if u2['g_date'] and u2['g_date'].date() == gd.date())
-            gr = day_hours % 8
-        else:
-            gd = TODAY
-            gr = 0
+    # 基准只算一次，循环内逐任务延续 current_g/current_remaining（与 daily.py 链式一致）
+    if unfinished:
+        last_u = unfinished[-1]
+        gd = last_u['g_date'] or TODAY
+        # 计算该 G 日期已有工时
+        day_hours = sum(u2['hours'] for u2 in unfinished if u2['g_date'] and u2['g_date'].date() == gd.date())
+        gr = day_hours % 8
+    else:
+        gd = TODAY
+        gr = 0
 
+    for t in new_tasks:
         seq += 1
         repo_name = t['repo'] if t['repo'] != repo_prev else ''
         if repo_name:

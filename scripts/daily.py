@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
 """每日脚本：找最新 Excel → 复制上工作日未完成任务 → 追加当天 md 新需求（按仓库分组合并）"""
 import openpyxl, os, shutil, re
+import sys
 from datetime import datetime
 from shared import (find_report_dir, format_desc, to_chinese, SEP, is_temp_task,
                     next_workday, rebuild_notes_merges, unmerge_notes_horizontal)
 from copy import copy
 from openpyxl.styles import Alignment
+
+# Windows 控制台/管道默认 GBK，强制 UTF-8 输出避免中文乱码
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except (AttributeError, ValueError, OSError):
+    pass
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
 TODAY = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -113,7 +120,7 @@ def parse_md(filepath):
         if not is_done or not seq.isdigit():
             continue
 
-        display = REPO_MAP.get(repo, repo)
+        display = REPO_MAP.get(repo, repo).replace('、', '+')
         if display not in tasks_by_repo:
             tasks_by_repo[display] = []
             repo_order.append(display)
@@ -122,8 +129,8 @@ def parse_md(filepath):
             'desc': desc,
             'modules': modules,
             'note': note,
-            'human_h': float(human_h.rstrip('h')),
-            'ai_h': float(ai_h.rstrip('h')),
+            'human_h': float(human_h.rstrip('h') or 0),
+            'ai_h': float(ai_h.rstrip('h') or 0),
         })
 
     result = []
