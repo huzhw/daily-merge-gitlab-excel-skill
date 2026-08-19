@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+
+# 工具产物
+.code-check.db
+
+# IDE
+.idea/
