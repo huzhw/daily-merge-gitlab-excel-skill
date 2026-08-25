@@ -123,9 +123,19 @@ def is_workday(d):
         import chinese_calendar as cc
         return cc.is_workday(d)
     except ImportError:
+        # 库未安装：整体降级为仅跳双休
         if not _HOLIDAY_WARNED:
-            print("[警告] chinesecalendar 未安装，G 列只跳双休、不跳节假日。"
-                  "请执行: pip install chinesecalendar")
+            print("[警告] chinesecalendar 未安装，G 列仅跳双休、不跳节假日。"
+                  "可执行: pip install chinesecalendar")
+            _HOLIDAY_WARNED = True
+        return d.weekday() < 5
+    except NotImplementedError:
+        # 库已安装，但查询年份超出官方数据范围（如 2027 尚未公布放假安排）。
+        # 按架构师决定：不做估算，缺数据年份直接按双休算；
+        # 官方数据发布后 pip install -U chinesecalendar 即自动恢复精确。
+        if not _HOLIDAY_WARNED:
+            print(f"[提示] {d.year} 年节假日数据未发布，该年日期仅按双休跳过"
+                  "（官方数据发布后升级 chinesecalendar 自动生效）")
             _HOLIDAY_WARNED = True
         return d.weekday() < 5
 
