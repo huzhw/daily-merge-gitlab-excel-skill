@@ -1,15 +1,14 @@
-# daily-merge — 日报 Excel 合并
+# daily-merge-gitlab-excel — 日报 Excel 合并
 
-日报流程第二步：读取 `daily-record` 生成的 md 需求记录，合并到当月 Excel 日报表。
+日报流程第二步：读取 `daily-record-gitlab-md` 生成的需求 md，合并到当月 Excel 日报表。
 
 ## 相关技能
-- [daily-record](https://github.com/huzhw/daily-record-skill)：日报记录（第一步）
+- [daily-record-gitlab-md](https://github.com/huzhw/daily-record-gitlab-md-skill)：日报记录（第一步）
 - [git-commit](https://github.com/huzhw/git-commit-skill)：Git 提交规范
-- [coding-rules](https://github.com/huzhw/coding-rules)：AI 编码协作规范
-- [reread-claude-md](https://github.com/huzhw/reread-claude-md-skill)：重新加载 CLAUDE.md 规则
-- [token-3000](https://github.com/huzhw/token-3000-skill)：API 一键切换（公司免费 ↔ 自己花钱）
-- [service-manager](https://github.com/huzhw/service-manager)：桌面服务管理工具
+- [reread-rules](https://github.com/huzhw/reread-rules-skill)：重载 CLAUDE.md / AGENTS.md 规则
+- [claude-code-token-3000](https://github.com/huzhw/claude-code-token-3000-skill)：Claude Code API Token 切换
 - [code-check](https://github.com/huzhw/code-check-skill)：增量代码隐患检查
+- [deepseek-harness-settings-curator](https://github.com/huzhw/deepseek-harness-settings-curator)：DSH 模型配置梳理
 
 ---
 
@@ -55,7 +54,7 @@ pip install openpyxl chinesecalendar
 ## 文件结构
 
 ```
-daily-merge/
+daily-merge-gitlab-excel/
 ├── SKILL.md              ← 技能指令
 ├── README.md             ← 本文档
 ├── JUNCTION说明.md        ← 与全局 skill 目录的 junction 同步说明
@@ -84,7 +83,7 @@ daily-merge/
 ## 安装
 
 ```bash
-git clone https://github.com/huzhw/daily-merge-skill.git ~/.claude/skills/daily-merge
+git clone https://github.com/huzhw/daily-merge-gitlab-excel-skill.git ~/.claude/skills/daily-merge-gitlab-excel
 ```
 
 安装后在 AI 编码助手里说「合并日报」触发。

@@ -1,6 +1,6 @@
 ---
-name: daily-merge
-description: 日报第二步：读取当天 md 需求记录，合并到当月累积 Excel 日报表。触发词：合并日报、合并excel、日报合并、生成日报表格。
+name: daily-merge-gitlab-excel
+description: 日报第二步：读取当天所有 md 需求记录，合并到当月累积 Excel 日报表。触发词：合并日报、合并excel、日报合并、生成日报表格。
 author: 胡志伟
 motto: "md 记账，Excel 交差——一个脚本每天跑，序号自动编，日期自动叠。"
 ---
