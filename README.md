@@ -30,6 +30,7 @@
 - 数据行和备注之间保留间距，备注原地不动
 - 冻结表头行
 - 去重：重复跑不会翻倍
+- 支持传日期参数补合并历史日报（`new_month.py`/`daily.py` 均可，如 `new_month.py 2026-09-01`），无参默认当天
 
 ## 使用
 
@@ -41,6 +42,12 @@ python scripts/new_month.py
 **其他日期：**
 ```bash
 python scripts/daily.py
+```
+
+**补合并历史日报**（漏跑/跨月补，如补 9-01）：
+```bash
+python scripts/new_month.py 2026-09-01
+python scripts/daily.py 2026-09-02
 ```
 
 或在 AI 编码助手里说「合并日报」自动判断执行。
@@ -64,8 +71,8 @@ daily-merge-gitlab-excel/
 │   ├── 日报模板.xlsx       ← 空白模板（月初无上月基准时兜底）
 │   └── generate_template.py ← 重新生成模板
 └── scripts/
-    ├── new_month.py      ← 月初：读上月 Excel，复制未完成任务 + 写入当天数据
-    ├── daily.py          ← 每日：昨日追加
+    ├── new_month.py      ← 月初：读上月 Excel，复制未完成任务 + 写入当天数据（可传 YYYY-MM-DD 补历史）
+    ├── daily.py          ← 每日：昨日追加（可传 YYYY-MM-DD 补历史）
     └── shared.py         ← 公用工具（workday 判断、描述格式化、说明区合并修复等）
 ```
 
