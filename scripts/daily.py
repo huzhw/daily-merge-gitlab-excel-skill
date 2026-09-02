@@ -15,7 +15,14 @@ except (AttributeError, ValueError, OSError):
     pass
 
 DESKTOP = r"C:\Users\Administrator\Desktop"
-TODAY = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+# 支持传参日期覆盖（YYYY-MM-DD），用于补合并历史日报；无参默认当天
+_ARG_DATE = None
+if len(sys.argv) > 1:
+    try:
+        _ARG_DATE = datetime.strptime(sys.argv[1], '%Y-%m-%d')
+    except ValueError:
+        print(f"[警告] 日期参数格式错误: {sys.argv[1]}，应为 YYYY-MM-DD，本次按当天执行")
+TODAY = (_ARG_DATE or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
 YEAR = TODAY.strftime("%Y")
 MONTH = TODAY.strftime("%m")
 MM = TODAY.strftime("%m")
