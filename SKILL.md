@@ -27,7 +27,7 @@ Excel 日报：  C:\Users\Administrator\Desktop\报告-{年}年\日报-{年}-{�
 | D | *任务描述 | md"需求概述+涉及模块+备注" | 同仓库多任务合并：N、需求概述\n涉及模块\n备注 |
 | E | *完成百分比 | 固定 0% | 留空手动填写 |
 | F | *任务创建时间 | 当天 | 录入后勿修改 |
-| G | *预计完成时间 | **计算** | 从上个任务 G 列按 H/8 个工作日叠加，跳过双休和法定节假日 |
+| G | *预计完成时间 | **计算** | 从上个任务 G 列按 H/8 个工作日叠加，跳过双休和法定节假日。**结果可能远在未来（跨月/跨年），属正常，见下方「结果解读」** |
 | H | *预计/实际工时 | md"人工工时" sum | 同仓库多任务工时求和 |
 | I | 调整预计完成时间 | — | 留空手动填写 |
 | J | 实际完成时间 | — | 留空手动填写 |
@@ -55,7 +55,23 @@ for 每个新任务:
 
 **第一个任务从当天开始算**。如果昨天已有任务，从昨天最后一个任务的 G 列和剩余小时继续叠加。
 
-> 依赖：脚本需要 `chinesecalendar` 库（`pip install chinesecalendar`）。未安装时自动降级为仅跳过双休并打印警告。
+### ⚠️ 结果解读（防误判，禁止当 bug 修）
+
+- G 列是**排队排期**：所有任务按 8h/工作日依次占用未来工作日，**积压未完成工时越大，日期推得越远**。
+- **跨月/跨年是正常输出**：例如 2026-09 累计积压排到 2027-02，完全正常——它表示"照当前积压量，这批任务预计做完的日期"，不是"当天完成"，更不是日期算错。**禁止因为"9 月的表出现 2027 年"就去怀疑或修改算法。**
+- **唯一异常判据**：新任务的 G 列**早于**基准最后一行的 G 列（日期倒退）才是算错；只要 G 单调不回退、且按 H/8 个工作日推进，就是正确结果。
+
+### chinesecalendar 依赖与版本对齐 🔴
+
+| 事项 | 说明 |
+|------|------|
+| 脚本运行版本 | **必须用** `C:\Users\Administrator\.pyenv\pyenv-win\versions\3.13.13\python.exe`（openpyxl 只有该版本完好） |
+| 装包版本错位坑 | 裸 `pip install` 装进 pyenv global（3.11.9），**脚本看不见，等于白装**。必须带绝对路径：`...\versions\3.13.13\python.exe -m pip install chinesecalendar` |
+| 数据年份边界 | 库只收录**国务院已公布**年份的节假日（当前 1.11.0 数据到 **2026-10-07**） |
+| 超范围年份行为 | 排期跨入未公布年份（如 2027）时，`is_workday` 抛 NotImplementedError → 脚本自动降级为**仅跳双休**并打警告。**该段日期可能偏早（如 2027 元旦不跳），不是 bug** |
+| 数据更新 | 国务院发布次年安排后（一般每年 11 月）执行 `...3.13.13\python.exe -m pip install -U chinesecalendar` 即自动恢复精确 |
+
+> 未安装库时降级为仅跳双休并打印警告；安装后重跑即恢复精确。
 
 ---
 
@@ -80,19 +96,21 @@ md 中同一仓库的所有已完成任务合并为 Excel 的一行。D 列拼�
 
 ## 执行方式
 
-技能被调用时，AI 判断当前日期后执行对应脚本：
+技能被调用时，AI 判断当前日期后执行对应脚本。**统一用 3.13.13 绝对路径**（pyenv shim 的 `python` 可能 Permission denied，裸 `python.exe` 不在 PATH）：
 
 **每月第一天：**
 ```bash
-python "{技能目录}/scripts/new_month.py"
+"C:\Users\Administrator\.pyenv\pyenv-win\versions\3.13.13\python.exe" "{技能目录}/scripts/new_month.py"
 ```
 从上月 Excel 复制未完成任务，序号跨月延续（无上月基准时才从 1 开始）。
 
 **其他日期：**
 ```bash
-python "{技能目录}/scripts/daily.py"
+"C:\Users\Administrator\.pyenv\pyenv-win\versions\3.13.13\python.exe" "{技能目录}/scripts/daily.py"
 ```
 复制昨天 Excel，追加当天新任务。
+
+**重跑幂等**：daily.py 会先清理当天已存在的旧数据行再重新追加，当天已合并过可安全重跑，不会产生重复序号。
 
 如果脚本报错或需要调整，AI 排查后修改对应脚本。
 
@@ -118,7 +136,8 @@ python "{技能目录}/scripts/daily.py"
 
 - **禁用 `python -c "多行代码"`**：本环境 bash 带 cmd 包装层，内联代码含 `||`/`&&`/换行会被 `goto :error` 拦截，报 `IndentationError: unexpected indent`。要多行处理 → 用 Write 写临时 `.py` 文件再 `python 文件.py`。
 - **officecli JSON 用 jq 提取**：`officecli view file.xlsx text --json | jq '.data.sheets[0].rows'`，**禁止**把 officecli 输出再喂给 `python -c` 二次处理。提取固定列用 jq 即可，无需 Python。
-- **验证合并结果**：跑完 `daily.py` 后用 `officecli view ... --json` 检查今天新增行（H 列工时 = md 人工工时 sum、G 列预计完成时间、N 列 AI 工时），有差异先改 md 再重跑。
+- **officecli 崩溃时的替代**：officecli 报 `System.Private.Xml ... FileNotFoundException` 时不可用，改用 Write 写临时 `.py`（openpyxl 读关键列打印），验证完删除临时脚本。
+- **验证合并结果**：跑完 `daily.py` 后检查今天新增行（H 列工时 = md 人工工时 sum、G 列预计完成时间、N 列 AI 工时），有差异先改 md 再重跑。**G 列跨月/跨年是排期正常结果，按「结果解读」的判据核对（G 不倒退即正确），不要误报为 bug。**
 
 ---
 
