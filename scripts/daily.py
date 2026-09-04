@@ -14,7 +14,7 @@ try:
 except (AttributeError, ValueError, OSError):
     pass
 
-DESKTOP = r"C:\Users\Administrator\Desktop"
+DESKTOP = r"F:\idea-workspase-skills\daily-report-panel"  # 日报根目录（2026-09-04 迁移自桌面，变量名沿用免改引用）
 # 支持传参日期覆盖（YYYY-MM-DD），用于补合并历史日报；无参默认当天
 _ARG_DATE = None
 if len(sys.argv) > 1:
