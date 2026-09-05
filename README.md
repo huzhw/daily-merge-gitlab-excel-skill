@@ -1,6 +1,8 @@
 # daily-merge-gitlab-excel — 日报 Excel 合并
 
-日报流程第二步：读取 `daily-record-gitlab-md` 生成的需求 md，合并到当月 Excel 日报表。
+> 日报管家（daily-report-panel）已自动接管合并/导出/发件，本 skill 保留为**手动兜底**（不推荐日常使用）。
+
+日报流程第二步（手动兜底）：读取 `daily-record-gitlab-md` 生成的需求 md，合并到当月 Excel 日报表。
 
 ## 相关技能
 - [daily-record-gitlab-md](https://github.com/huzhw/daily-record-gitlab-md-skill)：日报记录（第一步）
@@ -12,6 +14,7 @@
 - [agent-config-sync-check](https://github.com/huzhw/agent-config-sync-check)：四端同步守卫：链接/硬链接/README 同步检查与修复
 - [coding-rules](https://github.com/huzhw/coding-rules)：编码规则库（独立仓库，非 skill）
 - [service-manager](https://github.com/huzhw/service-manager)：服务管理器（关联仓库，非 skill）
+- [daily-report-panel](https://github.com/huzhw/daily-report-panel)：日报管家（关联仓库，非 skill，自动合并/导出/发件）
 
 ---
 
