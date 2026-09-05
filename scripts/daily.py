@@ -145,11 +145,22 @@ def parse_md(filepath):
         tasks = tasks_by_repo[repo]
         desc_parts = []
         for i, t in enumerate(tasks, 1):
-            part = f"{to_chinese(i)}、{format_desc(t['desc'])}"
+            # 层级组稿(与日报管家 merger.js 同规则):概述以编号开头时「一、」独立成行、
+            # 子项换行缩进;模块/备注加标签并缩进, 一、→1.→(1) 层级在 Excel 可读
+            fd = format_desc(t['desc'])
+            fd_lines = fd.split('\n')
+            first_line = fd_lines[0]
+            rest = fd_lines[1:]
+            if re.match(r'^\s*(\d+[\.、）)]|（\d+）|\(\d+\)|[a-zA-Z][\.、）)])', first_line):
+                part = f"{to_chinese(i)}、\n{fd}"
+            else:
+                part = f"{to_chinese(i)}、{first_line}"
+                if rest:
+                    part += '\n' + '\n'.join(rest)
             if t['modules'] and t['modules'] != '—':
-                part += f"\n{t['modules']}"
+                part += f"\n      涉及：{t['modules']}"
             if t['note'] and t['note'] != '—':
-                part += f"\n{t['note']}"
+                part += f"\n      备注：{t['note']}"
             desc_parts.append(part)
 
         result.append({

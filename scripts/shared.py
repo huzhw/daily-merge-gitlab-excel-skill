@@ -66,23 +66,29 @@ def to_chinese(n):
 
 
 def format_desc(desc):
-    """冒号后的行内编号子项 → 换行缩进，解决 D 列层级冲突。
-
-    "任务描述：1.子项A 2.子项B" → "任务描述：\\n    1.子项A\\n    2.子项B"
-    首个子项紧跟冒号无空格也能匹配；没有冒号时原样返回。
+    """层级缩进排版(与日报管家 sharedRules.js 同规则,改任一侧必须双侧同步)：
+    <br>→换行;编号行(1、/1-1、/1-1-1、)按 dash 深度纯空格缩进,
+    每级 6 空格(1、→6;1-1、→12;1-1-1、→18);标题/叙述行顶格;
+    括号注释行缩进 6 放末尾。无装饰字符,弹窗与 Excel 同文本。
     """
-    # md 表格内的换行标签 → Excel 单元格换行符（兼容 <br>、<br/>、<br />、</br>、大小写）
     desc = re.sub(r'<\s*/?\s*br\s*/?\s*>', '\n', desc, flags=re.I)
-    idx = max(desc.rfind('：'), desc.rfind(':'))
-    if idx < 0:
-        return desc
-    before = desc[:idx + 1]
-    after = desc[idx + 1:]
-    # 首个子项紧跟冒号（无空格）
-    after = re.sub(r'^(\d+[\.、)])', r'\n    \1', after)
-    # 后续子项（有空格）
-    after = re.sub(r'\s+(\d+[\.、)])', r'\n    \1', after)
-    return before + after
+    # 行内「冒号 + 编号子项」折行(编号后必须接空格,防时间/版本号误拆)
+    desc = re.sub(r'[：:](?=\d+[\.、）)]\s)', '：\n', desc)
+    out = []
+    for raw in desc.split('\n'):
+        line = raw.strip()
+        if not line:
+            continue
+        m = re.match(r'^((?:\d+(?:-\d+)*))[、.)]?\s*(.*)$', line)
+        if m and re.match(r'^\d+', line):
+            # 编号统一补顿号(1 / 1. / 1-1 → 1、 / 1-1、),按父链深度缩进(每级 6 空格)
+            level = m.group(1).count('-') + 1
+            out.append(' ' * (level * 6) + m.group(1) + '、' + m.group(2))
+        elif re.match(r'^[（(]', line):
+            out.append('      ' + line)   # 括号注释(提交次数/耗时/行数等),缩进 6
+        else:
+            out.append(line)              # 标题/叙述行顶格无标记
+    return '\n'.join(out)
 
 
 def is_temp_task(d_val, f_val, g_val, j_val):
