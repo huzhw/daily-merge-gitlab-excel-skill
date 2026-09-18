@@ -10,6 +10,7 @@
 | 全局路径（junction，DSH） | `C:\Users\Administrator\.dsh\skills\daily-merge-gitlab-excel` |
 | 全局路径（junction，Codex） | `C:\Users\Administrator\.codex\skills\daily-merge-gitlab-excel` |
 | 全局路径（junction，Zcode） | `C:\Users\Administrator\.zcode\skills\daily-merge-gitlab-excel` |
+| 全局路径（junction，Qoder） | `C:\Users\Administrator\.qoder\skills\daily-merge-gitlab-excel` |
 | 实际目录（F 仓库） | `F:\idea-workspase-skills\daily-merge-gitlab-excel` |
 | 更名记录 | 原 `daily-merge`，2026-08-28 更名为 `daily-merge-gitlab-excel` |
 
@@ -26,6 +27,7 @@ cmd /c dir "C:\Users\Administrator\.claude\skills" | findstr daily-merge-gitlab-
 cmd /c dir "C:\Users\Administrator\.dsh\skills"    | findstr daily-merge-gitlab-excel
 cmd /c dir "C:\Users\Administrator\.codex\skills" | findstr daily-merge-gitlab-excel
 cmd /c dir "C:\Users\Administrator\.zcode\skills" | findstr daily-merge-gitlab-excel
+cmd /c dir "C:\Users\Administrator\.qoder\skills" | findstr daily-merge-gitlab-excel
 ```
 
 正常应显示 `<JUNCTION>  ...  daily-merge-gitlab-excel`。
@@ -37,6 +39,7 @@ rd "C:\Users\Administrator\.claude\skills\daily-merge-gitlab-excel"
 rd "C:\Users\Administrator\.dsh\skills\daily-merge-gitlab-excel"
 rd "C:\Users\Administrator\.codex\skills\daily-merge-gitlab-excel"
 rd "C:\Users\Administrator\.zcode\skills\daily-merge-gitlab-excel"
+rd "C:\Users\Administrator\.qoder\skills\daily-merge-gitlab-excel"
 ```
 
 > 注意：`rd` 不要加 `/s`，否则可能递归进 F 源目录。删除 junction 只删链接，不删 F 源目录。
