@@ -4,6 +4,7 @@ __pycache__/
 
 # 工具产物
 .code-check.db
+.codegraph/
 
 # IDE
 .idea/
