@@ -7,7 +7,7 @@
 | 项 | 路径 |
 |----|------|
 | 全局路径（junction，Claude Code） | `C:\Users\Administrator\.claude\skills\daily-merge-gitlab-excel` |
-| 全局路径（junction，DSH） | `C:\Users\Administrator\.dsh\skills\daily-merge-gitlab-excel` |
+| 全局路径（junction，DeepSeek Harness） | `C:\Users\Administrator\.dsh\skills\daily-merge-gitlab-excel` |
 | 全局路径（junction，Codex） | `C:\Users\Administrator\.codex\skills\daily-merge-gitlab-excel` |
 | 全局路径（junction，Zcode） | `C:\Users\Administrator\.zcode\skills\daily-merge-gitlab-excel` |
 | 全局路径（junction，Qoder CN） | `C:\Users\Administrator\.qoder-cn\skills\daily-merge-gitlab-excel` |
